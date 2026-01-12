@@ -47,7 +47,7 @@ export default function TermsOfService() {
               <h2 className="text-xl font-semibold text-white mb-4">2. Description of Service</h2>
               <p className="text-gray-300 leading-relaxed">
                 Syllaboom is an AI-powered study guide generator that processes course syllabi to create
-                personalized study materials, including weekly schedules, flashcards, exam strategies,
+                personalized study materials, including weekly schedules, exam strategies,
                 and grade calculators.
               </p>
             </section>

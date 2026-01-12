@@ -14,7 +14,7 @@ const GENERATION_STEPS = [
   'Extracting course details...',
   'Analyzing topics & difficulty...',
   'Creating your battle plan...',
-  'Generating flashcards...',
+  'Building exam strategies...',
   'Building your calendar...',
   'Finalizing study guide...',
 ];

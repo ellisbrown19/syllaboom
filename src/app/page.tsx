@@ -96,8 +96,8 @@ export default function Home() {
               { icon: '📅', text: 'Export to Google/Apple Calendar' },
               { icon: '📊', text: 'Grade calculator → Excel/Sheets' },
               { icon: '⚔️', text: 'Week-by-week battle plan' },
-              { icon: '🃏', text: 'Ready-to-study flashcards' },
               { icon: '⚠️', text: 'Danger zone alerts' },
+              { icon: '🎯', text: 'Exam strategy guides' },
             ].map((item, i) => (
               <span
                 key={i}
@@ -259,13 +259,6 @@ export default function Home() {
               color: 'from-red-500/20 to-orange-500/20',
             },
             {
-              icon: '🃏',
-              title: 'AI-Generated Flashcards',
-              description: 'Key concepts and definitions extracted automatically. Ready to study. No more making your own cards.',
-              highlight: 'Study smarter',
-              color: 'from-amber-500/20 to-yellow-500/20',
-            },
-            {
               icon: '🎯',
               title: 'Exam Strategy Guide',
               description: 'For each exam: high-yield topics, study timeline, and prep phases. Know what to focus on and when to start.',
@@ -304,7 +297,7 @@ export default function Home() {
             {[
               { step: '1', title: 'Drop your PDF', desc: 'Upload any syllabus from any class' },
               { step: '2', title: 'AI analyzes it', desc: 'We extract dates, weights, topics, everything' },
-              { step: '3', title: 'Get your system', desc: 'Calendar, flashcards, and battle plan in 90 seconds' },
+              { step: '3', title: 'Get your system', desc: 'Calendar, grade calc, and battle plan in 90 seconds' },
             ].map((item, i) => (
               <div key={i} className="text-center">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-white font-bold text-lg flex items-center justify-center mx-auto mb-4">
@@ -329,7 +322,7 @@ export default function Home() {
             {[
               {
                 q: 'What do I get?',
-                a: 'A complete study guide with week-by-week plan, practice questions, flashcards, grade calculator, and Google Calendar export. Everything customized to YOUR syllabus.',
+                a: 'A complete study guide with week-by-week battle plan, exam strategies, grade calculator, and calendar export to Google/Apple. Everything customized to YOUR syllabus.',
               },
               {
                 q: 'How fast is it?',

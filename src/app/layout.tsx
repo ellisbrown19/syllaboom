@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Syllaboom - Turn Your Syllabus Into a Study System',
   description: 'Upload your syllabus, get a complete study guide with calendar export, grade calculator, and practice questions. $3 per class.',
-  keywords: ['syllabus', 'study guide', 'college', 'university', 'grade calculator', 'calendar', 'flashcards', 'AI'],
+  keywords: ['syllabus', 'study guide', 'college', 'university', 'grade calculator', 'calendar', 'exam prep', 'AI'],
   authors: [{ name: 'Syllaboom' }],
   openGraph: {
     title: 'Syllaboom - Turn Your Syllabus Into a Study System',

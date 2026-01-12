@@ -18,13 +18,11 @@ const tabs = [
   { id: 'priority', label: 'Priority Intel', icon: '🎯' },
   { id: 'exams', label: 'Exams', icon: '📝' },
   { id: 'grades', label: 'Grades', icon: '📊' },
-  { id: 'flashcards', label: 'Flashcards', icon: '🃏' },
 ];
 
 export default function StudyGuide({ guide, isPreview = false }: StudyGuideProps) {
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [showConfetti, setShowConfetti] = useState(true);
-  const [flippedCard, setFlippedCard] = useState<number | null>(null);
   const [grades, setGrades] = useState<Record<string, number | null>>({});
   const [lastGradeMilestone, setLastGradeMilestone] = useState<string | null>(null);
   const [spreadsheetType, setSpreadsheetType] = useState<'excel' | 'sheets'>('sheets');
@@ -130,9 +128,7 @@ export default function StudyGuide({ guide, isPreview = false }: StudyGuideProps
       if (exam.date) deadlines++;
     });
 
-    const flashcardCount = guide.flashcardDeck?.length || 0;
-
-    return { deadlines, assignments, flashcardCount };
+    return { deadlines, assignments };
   }, [guide]);
 
   useEffect(() => {
@@ -713,12 +709,8 @@ END:VEVENT\r
             <span className="text-gray-400 text-sm">deadlines tracked</span>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10">
-            <span className="text-2xl font-bold text-violet-400">{stats.flashcardCount}</span>
-            <span className="text-gray-400 text-sm">flashcards ready</span>
-          </div>
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10">
             <span className="text-2xl font-bold text-emerald-400">{stats.assignments}</span>
-            <span className="text-gray-400 text-sm">assignments in calculator</span>
+            <span className="text-gray-400 text-sm">assignments tracked</span>
           </div>
         </motion.div>
 
@@ -1462,71 +1454,6 @@ END:VEVENT\r
               </div>
             )}
 
-            {/* Flashcards Tab */}
-            {activeTab === 'flashcards' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-semibold">Flashcards</h3>
-                  <span className="px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-400 text-sm">
-                    {guide.flashcardDeck?.length || 0} cards
-                  </span>
-                </div>
-
-                {!guide.flashcardDeck?.length ? (
-                  <div className="text-center py-12 text-gray-500">
-                    <p>No flashcards generated for this course.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {guide.flashcardDeck.slice(0, 20).map((card, index) => (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: index * 0.05 }}
-                          onClick={() => setFlippedCard(flippedCard === index ? null : index)}
-                          className="relative cursor-pointer group"
-                        >
-                          <div className={`p-5 rounded-2xl border transition-all min-h-[150px] flex items-center justify-center text-center ${
-                            flippedCard === index
-                              ? 'bg-indigo-500/10 border-indigo-500/30'
-                              : 'bg-white/[0.02] border-white/5 hover:border-white/10'
-                          }`}>
-                            <div>
-                              {flippedCard === index ? (
-                                <motion.div
-                                  initial={{ opacity: 0, rotateX: -90 }}
-                                  animate={{ opacity: 1, rotateX: 0 }}
-                                >
-                                  <p className="text-xs text-indigo-400 uppercase tracking-wider mb-2">Answer</p>
-                                  <p className="text-gray-200">{card.back}</p>
-                                </motion.div>
-                              ) : (
-                                <div>
-                                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Question</p>
-                                  <p className="text-white font-medium">{card.front}</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="absolute top-3 right-3 text-gray-500 text-xs">
-                            Click to flip
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-
-                    {guide.flashcardDeck.length > 20 && (
-                      <p className="text-center text-gray-500">
-                        + {guide.flashcardDeck.length - 20} more cards
-                      </p>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
           </motion.div>
         </AnimatePresence>
 
@@ -1834,7 +1761,7 @@ END:VEVENT\r
 
               <p className="text-gray-500 mb-8 leading-relaxed text-sm max-w-md mx-auto">
                 Everything above, plus Google Calendar export, grade calculator,
-                flashcards, and exam strategies — personalized to your syllabus.
+                and exam strategies — personalized to your syllabus.
               </p>
 
               {/* What you get list */}
@@ -1846,10 +1773,10 @@ END:VEVENT\r
                   <span className="text-emerald-400">+</span> Grade calculator
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="text-emerald-400">+</span> Flashcards
+                  <span className="text-emerald-400">+</span> Exam strategies
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="text-emerald-400">+</span> Exam strategies
+                  <span className="text-emerald-400">+</span> Priority intel
                 </span>
               </div>
 
