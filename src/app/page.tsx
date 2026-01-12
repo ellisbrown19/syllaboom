@@ -10,26 +10,50 @@ import { analytics } from '@/lib/analytics';
 // Email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Syllabus limits by pricing tier
+const SYLLABUS_LIMITS = {
+  single: 1,
+  semester: 6,
+};
+
+interface UploadedSyllabus {
+  id: string;
+  text: string;
+  filename: string;
+}
+
 export default function Home() {
   const [priceType, setPriceType] = useState<'single' | 'semester'>('single');
-  const [syllabusText, setSyllabusText] = useState<string | null>(null);
-  const [filename, setFilename] = useState<string | null>(null);
+  const [syllabi, setSyllabi] = useState<UploadedSyllabus[]>([]);
   const [email, setEmail] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const isValidEmail = EMAIL_REGEX.test(email);
+  const maxSyllabi = SYLLABUS_LIMITS[priceType];
+  const canAddMore = syllabi.length < maxSyllabi;
 
   const handleFileProcessed = (text: string, name: string) => {
-    setSyllabusText(text);
-    setFilename(name);
+    if (!canAddMore) return;
+
+    const newSyllabus: UploadedSyllabus = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      text,
+      filename: name,
+    };
+
+    setSyllabi(prev => [...prev, newSyllabus]);
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2000);
   };
 
+  const handleRemoveSyllabus = (id: string) => {
+    setSyllabi(prev => prev.filter(s => s.id !== id));
+  };
+
   const handleCheckout = async () => {
-    if (!syllabusText || !isValidEmail || isCheckingOut) return;
+    if (syllabi.length === 0 || !isValidEmail || isCheckingOut) return;
 
     setIsCheckingOut(true);
     setCheckoutError(null);
@@ -37,8 +61,8 @@ export default function Home() {
     analytics.checkoutStarted(priceType, email);
     analytics.emailCaptured('checkout');
 
-    localStorage.setItem('pendingSyllabus', syllabusText);
-    localStorage.setItem('pendingFilename', filename || 'syllabus.pdf');
+    // Store all syllabi for processing after payment
+    localStorage.setItem('pendingSyllabi', JSON.stringify(syllabi));
 
     try {
       // Add timeout to prevent hanging requests
@@ -164,40 +188,68 @@ export default function Home() {
         >
           <div className="glass rounded-3xl p-6 sm:p-8 md:p-10 border border-white/5 shadow-2xl">
             {/* File Upload */}
-            <FileUpload onFileProcessed={handleFileProcessed} />
+            {canAddMore && (
+              <FileUpload onFileProcessed={handleFileProcessed} />
+            )}
 
-            {/* Success indicator */}
+            {/* Uploaded syllabi list */}
             <AnimatePresence>
-              {filename && (
+              {syllabi.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-4"
+                  className={canAddMore ? 'mt-4' : ''}
                 >
-                  <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                      className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center"
-                    >
-                      <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </motion.div>
-                    <div className="flex-1">
-                      <p className="font-medium text-emerald-400">Ready to analyze</p>
-                      <p className="text-sm text-gray-400">{filename}</p>
+                  <div className="space-y-2">
+                    {/* Counter */}
+                    <div className="flex items-center justify-between px-1 mb-3">
+                      <span className="text-sm text-gray-400">
+                        {syllabi.length} of {maxSyllabi} syllab{maxSyllabi === 1 ? 'us' : 'i'} uploaded
+                      </span>
+                      {priceType === 'single' && syllabi.length === 1 && (
+                        <span className="text-xs text-indigo-400">
+                          Upgrade to semester for up to 6
+                        </span>
+                      )}
                     </div>
-                    <button
-                      onClick={() => { setSyllabusText(null); setFilename(null); }}
-                      className="p-2 rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white"
-                    >
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+
+                    {/* File list */}
+                    {syllabi.map((syllabus, index) => (
+                      <motion.div
+                        key={syllabus.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{syllabus.filename}</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveSyllabus(syllabus.id)}
+                          className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-400 hover:text-white flex-shrink-0"
+                          aria-label={`Remove ${syllabus.filename}`}
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </motion.div>
+                    ))}
+
+                    {/* Add more prompt */}
+                    {canAddMore && syllabi.length > 0 && (
+                      <p className="text-center text-xs text-gray-500 pt-2">
+                        Drop or browse to add {maxSyllabi - syllabi.length} more
+                      </p>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -210,7 +262,7 @@ export default function Home() {
 
             {/* CTA Section */}
             <AnimatePresence>
-              {syllabusText && (
+              {syllabi.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}

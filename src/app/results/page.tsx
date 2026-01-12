@@ -8,6 +8,12 @@ import { exampleGuide } from '@/data/exampleGuide';
 import { analytics } from '@/lib/analytics';
 import type { StudyGuide as StudyGuideType } from '@/types';
 
+interface UploadedSyllabus {
+  id: string;
+  text: string;
+  filename: string;
+}
+
 const GENERATION_STEPS = [
   'Verifying payment...',
   'Reading your syllabus...',
@@ -21,10 +27,12 @@ const GENERATION_STEPS = [
 
 function ResultsContent() {
   const searchParams = useSearchParams();
-  const [guide, setGuide] = useState<StudyGuideType | null>(null);
+  const [guides, setGuides] = useState<StudyGuideType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
+  const [currentSyllabusIndex, setCurrentSyllabusIndex] = useState(0);
+  const [totalSyllabi, setTotalSyllabi] = useState(1);
   const [isPreview, setIsPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const stepIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -39,11 +47,11 @@ function ResultsContent() {
   }, []);
 
   useEffect(() => {
-    const loadGuide = async () => {
+    const loadGuides = async () => {
       // Check if this is the example preview
       const previewMode = searchParams.get('preview') === 'true';
       if (previewMode) {
-        setGuide(exampleGuide);
+        setGuides([exampleGuide]);
         setIsPreview(true);
         setIsLoading(false);
         return;
@@ -54,36 +62,53 @@ function ResultsContent() {
       const devMode = searchParams.get('dev') === 'true' && process.env.NODE_ENV === 'development';
       const forceRegenerate = searchParams.get('regenerate') === 'true';
 
-      // Check if there's a pending syllabus to process
-      const hasPendingSyllabus = !!localStorage.getItem('pendingSyllabus');
+      // Check for pending syllabi (new array format) or legacy single syllabus
+      const pendingSyllabiRaw = localStorage.getItem('pendingSyllabi');
+      const legacySyllabusText = localStorage.getItem('pendingSyllabus');
+      const hasPendingSyllabi = !!(pendingSyllabiRaw || legacySyllabusText);
 
-      // In dev mode with a pending syllabus, or with regenerate flag, skip cached guide
-      const shouldRegenerateGuide = (devMode && hasPendingSyllabus) || forceRegenerate;
+      // In dev mode with pending syllabi, or with regenerate flag, skip cached guides
+      const shouldRegenerateGuides = (devMode && hasPendingSyllabi) || forceRegenerate;
 
-      // Try to load existing guide from localStorage (unless we should regenerate)
-      if (!shouldRegenerateGuide) {
+      // Try to load existing guides from localStorage (unless we should regenerate)
+      if (!shouldRegenerateGuides) {
+        const storedGuides = localStorage.getItem('studyGuides');
+        if (storedGuides) {
+          try {
+            const parsed = JSON.parse(storedGuides);
+            // Validate it's an array with at least one valid guide
+            if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.courseName) {
+              setGuides(parsed);
+              setIsLoading(false);
+              return;
+            } else {
+              localStorage.removeItem('studyGuides');
+            }
+          } catch (parseError) {
+            console.error('Failed to parse stored guides:', parseError);
+            localStorage.removeItem('studyGuides');
+          }
+        }
+        // Also try legacy single guide format
         const storedGuide = localStorage.getItem('studyGuide');
         if (storedGuide) {
           try {
             const parsed = JSON.parse(storedGuide);
-            // Basic validation - ensure it has required fields
             if (parsed && typeof parsed === 'object' && parsed.courseName) {
-              setGuide(parsed);
+              setGuides([parsed]);
               setIsLoading(false);
               return;
             } else {
-              // Invalid data structure - clear it
               localStorage.removeItem('studyGuide');
             }
           } catch (parseError) {
-            // Corrupted localStorage data - clear it and let user regenerate
             console.error('Failed to parse stored guide:', parseError);
             localStorage.removeItem('studyGuide');
           }
         }
       }
 
-      // If coming from payment OR dev mode, generate the guide
+      // If coming from payment OR dev mode, generate the guides
       if (sessionId || devMode) {
         // Verify payment (skip in dev mode)
         if (sessionId && !devMode) {
@@ -105,77 +130,118 @@ function ResultsContent() {
           }
         }
 
-        const syllabusText = localStorage.getItem('pendingSyllabus');
-        if (syllabusText) {
+        // Get syllabi to process
+        let syllabiToProcess: UploadedSyllabus[] = [];
+
+        if (pendingSyllabiRaw) {
+          try {
+            syllabiToProcess = JSON.parse(pendingSyllabiRaw);
+          } catch {
+            console.error('Failed to parse pending syllabi');
+          }
+        } else if (legacySyllabusText) {
+          // Handle legacy single syllabus format
+          syllabiToProcess = [{
+            id: 'legacy',
+            text: legacySyllabusText,
+            filename: localStorage.getItem('pendingFilename') || 'syllabus.pdf',
+          }];
+        }
+
+        if (syllabiToProcess.length > 0) {
           setIsGenerating(true);
+          setTotalSyllabi(syllabiToProcess.length);
           analytics.guideGenerationStarted();
           const startTime = Date.now();
+          const generatedGuides: StudyGuideType[] = [];
 
-          // Simulate progress steps - store in ref for cleanup
-          stepIntervalRef.current = setInterval(() => {
-            setGenerationStep(prev => Math.min(prev + 1, GENERATION_STEPS.length - 1));
-          }, 15000); // Update every 15 seconds
+          // Process each syllabus sequentially
+          for (let i = 0; i < syllabiToProcess.length; i++) {
+            const syllabus = syllabiToProcess[i];
+            setCurrentSyllabusIndex(i);
+            setGenerationStep(0);
 
-          try {
-            setGenerationStep(1); // Reading syllabus
-            const response = await fetch('/api/generate-guide', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ syllabusText }),
-            });
+            // Progress steps for this syllabus
+            stepIntervalRef.current = setInterval(() => {
+              setGenerationStep(prev => Math.min(prev + 1, GENERATION_STEPS.length - 1));
+            }, 12000); // Update every 12 seconds
 
-            if (stepIntervalRef.current) {
-              clearInterval(stepIntervalRef.current);
-              stepIntervalRef.current = null;
-            }
-
-            if (!response.ok) {
-              let errorMessage = 'Generation failed';
-              try {
-                const errorData = await response.json();
-                errorMessage = errorData.error || errorMessage;
-              } catch {
-                // Response wasn't JSON - use default message
-              }
-              throw new Error(errorMessage);
-            }
-
-            let newGuide;
             try {
-              newGuide = await response.json();
-            } catch {
-              throw new Error('Invalid response from server');
-            }
+              setGenerationStep(1);
+              const response = await fetch('/api/generate-guide', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ syllabusText: syllabus.text }),
+              });
 
-            // Validate guide has required structure
-            if (!newGuide || !newGuide.courseName) {
-              throw new Error('Generated guide is missing required data');
-            }
-            const duration = Date.now() - startTime;
-            analytics.guideGenerationCompleted(newGuide.courseCode || 'unknown', duration);
+              if (stepIntervalRef.current) {
+                clearInterval(stepIntervalRef.current);
+                stepIntervalRef.current = null;
+              }
 
-            localStorage.setItem('studyGuide', JSON.stringify(newGuide));
-            localStorage.removeItem('pendingSyllabus');
-            localStorage.removeItem('pendingFilename');
-            setGuide(newGuide);
-          } catch (err) {
-            if (stepIntervalRef.current) {
-              clearInterval(stepIntervalRef.current);
-              stepIntervalRef.current = null;
+              if (!response.ok) {
+                let errorMessage = 'Generation failed';
+                try {
+                  const errorData = await response.json();
+                  errorMessage = errorData.error || errorMessage;
+                } catch {
+                  // Response wasn't JSON - use default message
+                }
+                throw new Error(`${syllabus.filename}: ${errorMessage}`);
+              }
+
+              let newGuide;
+              try {
+                newGuide = await response.json();
+              } catch {
+                throw new Error(`${syllabus.filename}: Invalid response from server`);
+              }
+
+              if (!newGuide || !newGuide.courseName) {
+                throw new Error(`${syllabus.filename}: Generated guide is missing required data`);
+              }
+
+              // Add source filename to guide for reference
+              newGuide.sourceFilename = syllabus.filename;
+              generatedGuides.push(newGuide);
+
+            } catch (err) {
+              if (stepIntervalRef.current) {
+                clearInterval(stepIntervalRef.current);
+                stepIntervalRef.current = null;
+              }
+              const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+              analytics.guideGenerationFailed(errorMessage);
+              setError(`Failed to generate study guide: ${errorMessage}. Please contact support.`);
+              setIsGenerating(false);
+              setIsLoading(false);
+              return;
             }
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            analytics.guideGenerationFailed(errorMessage);
-            setError(`Failed to generate study guide: ${errorMessage}. Please contact support.`);
-          } finally {
-            setIsGenerating(false);
           }
+
+          // All syllabi processed successfully
+          const duration = Date.now() - startTime;
+          analytics.guideGenerationCompleted(
+            generatedGuides.map(g => g.courseCode || 'unknown').join(', '),
+            duration
+          );
+
+          // Store all guides
+          localStorage.setItem('studyGuides', JSON.stringify(generatedGuides));
+          // Clean up pending data
+          localStorage.removeItem('pendingSyllabi');
+          localStorage.removeItem('pendingSyllabus');
+          localStorage.removeItem('pendingFilename');
+
+          setGuides(generatedGuides);
+          setIsGenerating(false);
         }
       }
 
       setIsLoading(false);
     };
 
-    loadGuide();
+    loadGuides();
   }, [searchParams]);
 
   if (isLoading || isGenerating) {
@@ -192,8 +258,15 @@ function ResultsContent() {
           {/* Progress step */}
           {isGenerating && (
             <>
+              {/* Multi-syllabus progress indicator */}
+              {totalSyllabi > 1 && (
+                <p className="text-indigo-400 text-sm font-medium mb-3">
+                  Processing syllabus {currentSyllabusIndex + 1} of {totalSyllabi}
+                </p>
+              )}
+
               <motion.p
-                key={generationStep}
+                key={`${currentSyllabusIndex}-${generationStep}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="text-xl font-medium text-white mb-2"
@@ -201,10 +274,24 @@ function ResultsContent() {
                 {GENERATION_STEPS[generationStep]}
               </motion.p>
               <p className="text-gray-400 text-sm mb-6">
-                This usually takes 2-3 minutes
+                {totalSyllabi > 1
+                  ? `This usually takes ${totalSyllabi * 2}-${totalSyllabi * 3} minutes for ${totalSyllabi} syllabi`
+                  : 'This usually takes 2-3 minutes'}
               </p>
 
-              {/* Progress bar */}
+              {/* Overall progress bar for multiple syllabi */}
+              {totalSyllabi > 1 && (
+                <div className="w-full bg-white/5 rounded-full h-1.5 mb-4">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full"
+                    initial={{ width: '0%' }}
+                    animate={{ width: `${((currentSyllabusIndex) / totalSyllabi) * 100}%` }}
+                    transition={{ duration: 0.5 }}
+                  />
+                </div>
+              )}
+
+              {/* Current syllabus progress bar */}
               <div className="w-full bg-white/10 rounded-full h-2 mb-4">
                 <motion.div
                   className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full"
@@ -229,7 +316,7 @@ function ResultsContent() {
           )}
 
           {!isGenerating && (
-            <p className="text-gray-300">Loading your study guide...</p>
+            <p className="text-gray-300">Loading your study guides...</p>
           )}
         </div>
       </main>
@@ -245,16 +332,16 @@ function ResultsContent() {
     );
   }
 
-  if (!guide) {
+  if (guides.length === 0) {
     return (
       <main className="container mx-auto px-4 py-16 text-center">
-        <div className="text-xl mb-4">No study guide found</div>
+        <div className="text-xl mb-4">No study guides found</div>
         <a href="/" className="text-blue-400 hover:underline">← Upload a syllabus</a>
       </main>
     );
   }
 
-  return <StudyGuide guide={guide} isPreview={isPreview} />;
+  return <StudyGuide guides={guides} isPreview={isPreview} />;
 }
 
 export default function ResultsPage() {

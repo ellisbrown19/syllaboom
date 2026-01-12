@@ -7,7 +7,7 @@ import CalendarView from './CalendarView';
 import TopicRoadmap from './TopicRoadmap';
 
 interface StudyGuideProps {
-  guide: StudyGuideType;
+  guides: StudyGuideType[];
   isPreview?: boolean;
 }
 
@@ -20,22 +20,34 @@ const tabs = [
   { id: 'grades', label: 'Grades', icon: '📊' },
 ];
 
-export default function StudyGuide({ guide, isPreview = false }: StudyGuideProps) {
+export default function StudyGuide({ guides, isPreview = false }: StudyGuideProps) {
+  const [selectedCourseIndex, setSelectedCourseIndex] = useState(0);
+  const hasMultipleCourses = guides.length > 1;
+
+  // Current guide for display
+  const guide = guides[selectedCourseIndex] || guides[0];
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [showConfetti, setShowConfetti] = useState(true);
-  const [grades, setGrades] = useState<Record<string, number | null>>({});
+  // Grades keyed by course index and item key: { "0-Homework-0": 85, "1-Exam-0": 90, ... }
+  const [allGrades, setAllGrades] = useState<Record<string, Record<string, number | null>>>({});
   const [lastGradeMilestone, setLastGradeMilestone] = useState<string | null>(null);
+  // Grade calculator course tab (separate from main content tabs)
+  const [gradeCalcCourseIndex, setGradeCalcCourseIndex] = useState(0);
+
+  // Get grades for current course (for grade calculator)
+  const grades = allGrades[gradeCalcCourseIndex] || {};
+  const gradeCalcGuide = guides[gradeCalcCourseIndex] || guides[0];
   const [spreadsheetType, setSpreadsheetType] = useState<'excel' | 'sheets'>('sheets');
   const [showExportHelp, setShowExportHelp] = useState(false);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
 
-  // Calculate weighted grade
+  // Calculate weighted grade for the grade calculator course
   const calculatedGrade = useMemo(() => {
     let totalWeight = 0;
     let weightedSum = 0;
     let hasAnyGrade = false;
 
-    guide.gradingBreakdown?.components?.forEach((component) => {
+    gradeCalcGuide.gradingBreakdown?.components?.forEach((component) => {
       component.items?.forEach((item, i) => {
         const key = `${component.category}-${i}`;
         const grade = grades[key];
@@ -49,7 +61,7 @@ export default function StudyGuide({ guide, isPreview = false }: StudyGuideProps
 
     if (!hasAnyGrade || totalWeight === 0) return null;
     return (weightedSum / totalWeight) * 100;
-  }, [grades, guide.gradingBreakdown]);
+  }, [grades, gradeCalcGuide.gradingBreakdown]);
 
   // Check for grade milestone achievements - use ref to prevent race conditions
   const milestoneTriggeredRef = React.useRef<string | null>(null);
@@ -85,14 +97,20 @@ export default function StudyGuide({ guide, isPreview = false }: StudyGuideProps
 
   const handleGradeChange = (key: string, value: string) => {
     if (value === '') {
-      setGrades(prev => ({ ...prev, [key]: null }));
+      setAllGrades(prev => ({
+        ...prev,
+        [gradeCalcCourseIndex]: { ...(prev[gradeCalcCourseIndex] || {}), [key]: null }
+      }));
       return;
     }
     const parsed = parseFloat(value);
     // Only update if it's a valid number
     if (!isNaN(parsed)) {
       const numValue = Math.min(100, Math.max(0, parsed));
-      setGrades(prev => ({ ...prev, [key]: numValue }));
+      setAllGrades(prev => ({
+        ...prev,
+        [gradeCalcCourseIndex]: { ...(prev[gradeCalcCourseIndex] || {}), [key]: numValue }
+      }));
     }
   };
 
@@ -125,6 +143,7 @@ export default function StudyGuide({ guide, isPreview = false }: StudyGuideProps
     let deadlines = 0;
     let assignments = 0;
 
+    // Stats are for the currently displayed course (not grade calc course)
     guide.gradingBreakdown?.components?.forEach((component) => {
       component.items?.forEach((item) => {
         assignments++;
@@ -132,6 +151,7 @@ export default function StudyGuide({ guide, isPreview = false }: StudyGuideProps
       });
     });
 
+    // Use guide for stats (overview course)
     guide.examStrategy?.forEach((exam) => {
       if (exam.date) deadlines++;
     });
@@ -192,153 +212,165 @@ export default function StudyGuide({ guide, isPreview = false }: StudyGuideProps
     return date.toISOString().split('T')[0].replace(/-/g, '');
   };
 
+  // Export combined calendar for all courses
   const exportToCalendar = () => {
     const dtstamp = generateDTSTAMP();
+    // Calendar name: if multiple courses, use "Semester Schedule", otherwise use course name
+    const calendarName = hasMultipleCourses
+      ? 'Semester Schedule - Syllaboom'
+      : `${guides[0].courseCode} - ${guides[0].courseName}`;
+
     let icsContent = `BEGIN:VCALENDAR\r
 VERSION:2.0\r
 PRODID:-//Syllaboom//Study Guide//EN\r
 CALSCALE:GREGORIAN\r
 METHOD:PUBLISH\r
-X-WR-CALNAME:${escapeICSText(guide.courseCode)} - ${escapeICSText(guide.courseName)}\r
+X-WR-CALNAME:${escapeICSText(calendarName)}\r
 `;
 
-    if (guide.meetingSchedule || guide.meetingTimes) {
-      const schedule = guide.meetingSchedule;
-      const dayMap: Record<string, string> = {
-        'Monday': 'MO', 'Tuesday': 'TU', 'Wednesday': 'WE',
-        'Thursday': 'TH', 'Friday': 'FR', 'Saturday': 'SA', 'Sunday': 'SU',
-        'Mon': 'MO', 'Tue': 'TU', 'Wed': 'WE', 'Thu': 'TH', 'Fri': 'FR',
-        'M': 'MO', 'T': 'TU', 'W': 'WE', 'R': 'TH', 'F': 'FR'
-      };
+    const dayMap: Record<string, string> = {
+      'Monday': 'MO', 'Tuesday': 'TU', 'Wednesday': 'WE',
+      'Thursday': 'TH', 'Friday': 'FR', 'Saturday': 'SA', 'Sunday': 'SU',
+      'Mon': 'MO', 'Tue': 'TU', 'Wed': 'WE', 'Thu': 'TH', 'Fri': 'FR',
+      'M': 'MO', 'T': 'TU', 'W': 'WE', 'R': 'TH', 'F': 'FR'
+    };
 
-      let byDays: string[] = [];
-      let startTime = '09:00';
-      let endTime = '10:00';
+    // Process each guide and add its events
+    guides.forEach((g, guideIndex) => {
+      // Add class schedule for this course
+      if (g.meetingSchedule || g.meetingTimes) {
+        const schedule = g.meetingSchedule;
+        let byDays: string[] = [];
+        let startTime = '09:00';
+        let endTime = '10:00';
 
-      if (schedule?.days) {
-        byDays = schedule.days.map(d => dayMap[d] || d.substring(0, 2).toUpperCase()).filter(Boolean);
-        startTime = schedule.startTime || '09:00';
-        endTime = schedule.endTime || '10:00';
-      } else if (guide.meetingTimes) {
-        const timeStr = guide.meetingTimes;
-        if (timeStr.includes('M')) byDays.push('MO');
-        if (timeStr.includes('T') && !timeStr.includes('Th')) byDays.push('TU');
-        if (timeStr.includes('W')) byDays.push('WE');
-        if (timeStr.includes('Th') || timeStr.includes('R')) byDays.push('TH');
-        if (timeStr.includes('F')) byDays.push('FR');
+        if (schedule?.days) {
+          byDays = schedule.days.map(d => dayMap[d] || d.substring(0, 2).toUpperCase()).filter(Boolean);
+          startTime = schedule.startTime || '09:00';
+          endTime = schedule.endTime || '10:00';
+        } else if (g.meetingTimes) {
+          const timeStr = g.meetingTimes;
+          if (timeStr.includes('M')) byDays.push('MO');
+          if (timeStr.includes('T') && !timeStr.includes('Th')) byDays.push('TU');
+          if (timeStr.includes('W')) byDays.push('WE');
+          if (timeStr.includes('Th') || timeStr.includes('R')) byDays.push('TH');
+          if (timeStr.includes('F')) byDays.push('FR');
 
-        const timeMatch = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
-        if (timeMatch) {
-          let startHour = parseInt(timeMatch[1]);
-          const startMin = timeMatch[2] || '00';
-          const startPeriod = timeMatch[3]?.toUpperCase();
-          let endHour = parseInt(timeMatch[4]);
-          const endMin = timeMatch[5] || '00';
-          const endPeriod = (timeMatch[6] || timeMatch[3])?.toUpperCase();
+          const timeMatch = timeStr.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):?(\d{2})?\s*(AM|PM)?/i);
+          if (timeMatch) {
+            let startHour = parseInt(timeMatch[1]);
+            const startMin = timeMatch[2] || '00';
+            const startPeriod = timeMatch[3]?.toUpperCase();
+            let endHour = parseInt(timeMatch[4]);
+            const endMin = timeMatch[5] || '00';
+            const endPeriod = (timeMatch[6] || timeMatch[3])?.toUpperCase();
 
-          if (startPeriod === 'PM' && startHour !== 12) startHour += 12;
-          if (startPeriod === 'AM' && startHour === 12) startHour = 0;
-          if (endPeriod === 'PM' && endHour !== 12) endHour += 12;
-          if (endPeriod === 'AM' && endHour === 12) endHour = 0;
+            if (startPeriod === 'PM' && startHour !== 12) startHour += 12;
+            if (startPeriod === 'AM' && startHour === 12) startHour = 0;
+            if (endPeriod === 'PM' && endHour !== 12) endHour += 12;
+            if (endPeriod === 'AM' && endHour === 12) endHour = 0;
 
-          startTime = `${startHour.toString().padStart(2, '0')}:${startMin}`;
-          endTime = `${endHour.toString().padStart(2, '0')}:${endMin}`;
+            startTime = `${startHour.toString().padStart(2, '0')}:${startMin}`;
+            endTime = `${endHour.toString().padStart(2, '0')}:${endMin}`;
+          }
         }
-      }
 
-      if (byDays.length > 0) {
-        const today = new Date();
-        const startDate = new Date(today);
-        startDate.setDate(today.getDate() + ((1 - today.getDay() + 7) % 7 || 7));
+        if (byDays.length > 0) {
+          const today = new Date();
+          const startDate = new Date(today);
+          startDate.setDate(today.getDate() + ((1 - today.getDay() + 7) % 7 || 7));
 
-        const dateStr = startDate.toISOString().split('T')[0].replace(/-/g, '');
-        const startTimeStr = startTime.replace(':', '') + '00';
-        const endTimeStr = endTime.replace(':', '') + '00';
-        const description = escapeICSText(`${guide.courseName}\nInstructor: ${guide.instructor}\nLocation: ${guide.location || 'TBD'}`);
+          const dateStr = startDate.toISOString().split('T')[0].replace(/-/g, '');
+          const startTimeStr = startTime.replace(':', '') + '00';
+          const endTimeStr = endTime.replace(':', '') + '00';
+          const description = escapeICSText(`${g.courseName}\nInstructor: ${g.instructor}\nLocation: ${g.location || 'TBD'}`);
 
-        icsContent += `BEGIN:VEVENT\r
-UID:class-${guide.courseCode}@syllaboom.com\r
+          icsContent += `BEGIN:VEVENT\r
+UID:class-${guideIndex}-${g.courseCode}@syllaboom.com\r
 DTSTAMP:${dtstamp}\r
-SUMMARY:${escapeICSText(guide.courseCode)} - Class\r
+SUMMARY:${escapeICSText(g.courseCode)} - Class\r
 DESCRIPTION:${description}\r
-LOCATION:${escapeICSText(guide.location || '')}\r
+LOCATION:${escapeICSText(g.location || '')}\r
 DTSTART:${dateStr}T${startTimeStr}\r
 DTEND:${dateStr}T${endTimeStr}\r
 RRULE:FREQ=WEEKLY;BYDAY=${byDays.join(',')};COUNT=16\r
 END:VEVENT\r
 `;
+        }
       }
-    }
 
-    guide.examStrategy?.forEach((exam, index) => {
-      if (exam.date) {
-        const examDate = formatDateForICS(exam.date);
-        const dateOnly = examDate.split('T')[0];
-        const nextDay = getNextDay(dateOnly);
-        const description = escapeICSText(`Weight: ${exam.weight}\nTopics: ${exam.coverage?.join(', ') || 'See syllabus'}`);
+      // Add exams for this course
+      g.examStrategy?.forEach((exam, index) => {
+        if (exam.date) {
+          const examDate = formatDateForICS(exam.date);
+          const dateOnly = examDate.split('T')[0];
+          const nextDay = getNextDay(dateOnly);
+          const description = escapeICSText(`Course: ${g.courseCode}\nWeight: ${exam.weight}\nTopics: ${exam.coverage?.join(', ') || 'See syllabus'}`);
 
-        icsContent += `BEGIN:VEVENT\r
-UID:exam-${index}-${guide.courseCode}@syllaboom.com\r
+          icsContent += `BEGIN:VEVENT\r
+UID:exam-${guideIndex}-${index}-${g.courseCode}@syllaboom.com\r
 DTSTAMP:${dtstamp}\r
-SUMMARY:${escapeICSText(guide.courseCode)} - ${escapeICSText(exam.exam)}\r
+SUMMARY:${escapeICSText(g.courseCode)} - ${escapeICSText(exam.exam)}\r
 DESCRIPTION:${description}\r
 DTSTART;VALUE=DATE:${dateOnly}\r
 DTEND;VALUE=DATE:${nextDay}\r
 BEGIN:VALARM\r
 TRIGGER:-P1D\r
 ACTION:DISPLAY\r
-DESCRIPTION:Exam tomorrow: ${escapeICSText(exam.exam)}\r
+DESCRIPTION:Exam tomorrow: ${escapeICSText(g.courseCode)} - ${escapeICSText(exam.exam)}\r
 END:VALARM\r
 BEGIN:VALARM\r
 TRIGGER:-P3D\r
 ACTION:DISPLAY\r
-DESCRIPTION:Exam in 3 days: ${escapeICSText(exam.exam)}\r
+DESCRIPTION:Exam in 3 days: ${escapeICSText(g.courseCode)} - ${escapeICSText(exam.exam)}\r
 END:VALARM\r
 END:VEVENT\r
 `;
 
-        if (exam.studyPlan?.startDate) {
-          const studyStart = formatDateForICS(exam.studyPlan.startDate);
-          const studyDateOnly = studyStart.split('T')[0];
-          const studyNextDay = getNextDay(studyDateOnly);
-          icsContent += `BEGIN:VEVENT\r
-UID:study-${index}-${guide.courseCode}@syllaboom.com\r
+          if (exam.studyPlan?.startDate) {
+            const studyStart = formatDateForICS(exam.studyPlan.startDate);
+            const studyDateOnly = studyStart.split('T')[0];
+            const studyNextDay = getNextDay(studyDateOnly);
+            icsContent += `BEGIN:VEVENT\r
+UID:study-${guideIndex}-${index}-${g.courseCode}@syllaboom.com\r
 DTSTAMP:${dtstamp}\r
-SUMMARY:Start studying for ${escapeICSText(exam.exam)}\r
+SUMMARY:${escapeICSText(g.courseCode)} - Start studying for ${escapeICSText(exam.exam)}\r
 DESCRIPTION:Begin exam prep for ${escapeICSText(exam.exam)}\r
 DTSTART;VALUE=DATE:${studyDateOnly}\r
 DTEND;VALUE=DATE:${studyNextDay}\r
 END:VEVENT\r
 `;
+          }
         }
-      }
-    });
+      });
 
-    guide.gradingBreakdown?.components?.forEach((component) => {
-      component.items?.forEach((item, index) => {
-        if (item.date) {
-          const itemDate = formatDateForICS(item.date);
-          const dateOnly = itemDate.split('T')[0];
-          const nextDay = getNextDay(dateOnly);
-          const description = escapeICSText(`Category: ${item.category || component.category}\nWeight: ${item.weight}%`);
+      // Add assignments for this course
+      g.gradingBreakdown?.components?.forEach((component) => {
+        component.items?.forEach((item, index) => {
+          if (item.date) {
+            const itemDate = formatDateForICS(item.date);
+            const dateOnly = itemDate.split('T')[0];
+            const nextDay = getNextDay(dateOnly);
+            const description = escapeICSText(`Course: ${g.courseCode}\nCategory: ${item.category || component.category}\nWeight: ${item.weight}%`);
 
-          icsContent += `BEGIN:VEVENT\r
-UID:assignment-${component.category}-${index}-${guide.courseCode}@syllaboom.com\r
+            icsContent += `BEGIN:VEVENT\r
+UID:assignment-${guideIndex}-${component.category}-${index}-${g.courseCode}@syllaboom.com\r
 DTSTAMP:${dtstamp}\r
-SUMMARY:${escapeICSText(guide.courseCode)} - ${escapeICSText(item.name)} Due\r
+SUMMARY:${escapeICSText(g.courseCode)} - ${escapeICSText(item.name)} Due\r
 DESCRIPTION:${description}\r
 DTSTART;VALUE=DATE:${dateOnly}\r
 DTEND;VALUE=DATE:${nextDay}\r
 BEGIN:VALARM\r
 TRIGGER:-P1D\r
 ACTION:DISPLAY\r
-DESCRIPTION:Due tomorrow: ${escapeICSText(item.name)}\r
+DESCRIPTION:Due tomorrow: ${escapeICSText(g.courseCode)} - ${escapeICSText(item.name)}\r
 END:VALARM\r
 END:VEVENT\r
 `;
-        }
+          }
+        });
       });
-    });
+    }); // End guides.forEach
 
     icsContent += 'END:VCALENDAR\r\n';
 
@@ -346,23 +378,29 @@ END:VEVENT\r
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${guide.courseCode || 'course'}-schedule.ics`;
+    // Filename: if multiple courses use "semester-schedule.ics", otherwise use course code
+    const filename = hasMultipleCourses
+      ? 'semester-schedule.ics'
+      : `${guides[0].courseCode || 'course'}-schedule.ics`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
+  // Export grades for the currently selected course in grade calculator
   const exportToCSV = () => {
     const rows: string[][] = [
-      ['Category', 'Name', 'Weight (%)', 'Due Date', 'Grade', 'Letter Grade']
+      ['Course', 'Category', 'Name', 'Weight (%)', 'Due Date', 'Grade', 'Letter Grade']
     ];
 
-    guide.gradingBreakdown?.components?.forEach((component) => {
+    gradeCalcGuide.gradingBreakdown?.components?.forEach((component) => {
       component.items?.forEach((item, i) => {
         const gradeKey = `${component.category}-${i}`;
         const grade = grades[gradeKey];
         rows.push([
+          gradeCalcGuide.courseCode || 'Course',
           item.category || component.category,
           item.name,
           item.weight.toString(),
@@ -384,7 +422,7 @@ END:VEVENT\r
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${guide.courseCode || 'course'}-assignments.csv`;
+    a.download = `${gradeCalcGuide.courseCode || 'course'}-assignments.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -401,7 +439,7 @@ END:VEVENT\r
     // Header row
     rows.push(['Category', 'Assignment', 'Weight (%)', 'Due Date', 'Grade (0-100)', 'Points Earned', 'Letter Grade']);
 
-    guide.gradingBreakdown?.components?.forEach((component) => {
+    gradeCalcGuide.gradingBreakdown?.components?.forEach((component) => {
       component.items?.forEach((item, i) => {
         const gradeKey = `${component.category}-${i}`;
         const grade = grades[gradeKey];
@@ -464,7 +502,7 @@ END:VEVENT\r
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${guide.courseCode || 'course'}-grades-${type}.tsv`;
+    a.download = `${gradeCalcGuide.courseCode || 'course'}-grades-${type}.tsv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -478,7 +516,7 @@ END:VEVENT\r
 
     rows.push(['Category', 'Assignment', 'Weight (%)', 'Due Date', 'Grade (0-100)', 'Points Earned', 'Letter Grade']);
 
-    guide.gradingBreakdown?.components?.forEach((component) => {
+    gradeCalcGuide.gradingBreakdown?.components?.forEach((component) => {
       component.items?.forEach((item, i) => {
         const gradeKey = `${component.category}-${i}`;
         const grade = grades[gradeKey];
@@ -721,6 +759,36 @@ END:VEVENT\r
             <span className="text-gray-400 text-sm">assignments tracked</span>
           </div>
         </motion.div>
+
+        {/* Course Selector - Only show if multiple courses */}
+        {hasMultipleCourses && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="mb-6"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-medium text-gray-400">Your Courses ({guides.length})</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {guides.map((g, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedCourseIndex(idx)}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    selectedCourseIndex === idx
+                      ? 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/25'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10'
+                  }`}
+                >
+                  <span className="font-semibold">{g.courseCode}</span>
+                  <span className="hidden sm:inline text-gray-400 ml-1.5">- {g.courseName}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Course Header Card */}
         <motion.div
@@ -1317,10 +1385,31 @@ END:VEVENT\r
             {/* Grades Tab */}
             {activeTab === 'grades' && (
               <div className="space-y-6">
+                {/* Course Tabs - Only show if multiple courses */}
+                {hasMultipleCourses && (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {guides.map((g, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setGradeCalcCourseIndex(idx)}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          gradeCalcCourseIndex === idx
+                            ? 'bg-indigo-500 text-white'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {g.courseCode || `Course ${idx + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* Grade Header with Live Calculation */}
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 p-6 rounded-2xl bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/10">
                   <div>
-                    <h3 className="text-xl font-semibold mb-1">Grade Calculator</h3>
+                    <h3 className="text-xl font-semibold mb-1">
+                      {hasMultipleCourses ? `${gradeCalcGuide.courseCode} - Grade Calculator` : 'Grade Calculator'}
+                    </h3>
                     <p className="text-sm text-gray-500">Enter your grades to see your current standing</p>
                   </div>
                   <div className="text-center">
@@ -1367,11 +1456,11 @@ END:VEVENT\r
                   </motion.div>
                 )}
 
-                {!guide.gradingBreakdown?.components?.length ? (
+                {!gradeCalcGuide.gradingBreakdown?.components?.length ? (
                   <div className="text-center py-12 text-gray-500">
                     <p>No grading information found in the syllabus.</p>
                   </div>
-                ) : guide.gradingBreakdown.components.map((component, index) => (
+                ) : gradeCalcGuide.gradingBreakdown.components.map((component, index) => (
                   <motion.div
                     key={component.category}
                     initial={{ opacity: 0, y: 10 }}
@@ -1440,11 +1529,11 @@ END:VEVENT\r
                   </motion.div>
                 ))}
 
-                {guide.gradingBreakdown?.specialRules && guide.gradingBreakdown.specialRules.length > 0 && (
+                {gradeCalcGuide.gradingBreakdown?.specialRules && gradeCalcGuide.gradingBreakdown.specialRules.length > 0 && (
                   <div className="mt-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
                     <h4 className="font-medium text-amber-400 mb-2">Special Rules</h4>
                     <ul className="space-y-1">
-                      {guide.gradingBreakdown.specialRules.map((rule, i) => (
+                      {gradeCalcGuide.gradingBreakdown.specialRules.map((rule, i) => (
                         <li key={i} className="text-sm text-gray-300">• {rule}</li>
                       ))}
                     </ul>
