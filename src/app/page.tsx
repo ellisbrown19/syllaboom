@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import FileUpload from '@/components/FileUpload';
 import PricingToggle from '@/components/PricingToggle';
 import { analytics } from '@/lib/analytics';
@@ -210,7 +211,7 @@ export default function Home() {
                     disabled={!email}
                     className="w-full py-5 rounded-2xl font-semibold text-lg bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500 hover:from-indigo-400 hover:via-violet-400 hover:to-purple-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40"
                   >
-                    Get My Study System — ${priceType === 'single' ? '3' : '8'}
+                    Get My Study System — ${priceType === 'single' ? '1.79' : '4.89'}
                   </motion.button>
 
                   <button
@@ -325,6 +326,131 @@ export default function Home() {
                 <p className="text-gray-400 text-sm leading-relaxed">{item.desc}</p>
               </div>
             ))}
+          </div>
+        </motion.div>
+
+        {/* Real Results Showcase */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.9 }}
+          className="mt-32 md:mt-40"
+        >
+          <div className="text-center mb-14">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4 tracking-tight">
+              See it in your apps
+            </h2>
+            <p className="text-gray-400 max-w-xl mx-auto text-base sm:text-lg leading-relaxed">
+              Your syllabus data, automatically synced to the tools you already use
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+            {/* Calendar - Class Schedule */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="group"
+            >
+              <div className="rounded-2xl overflow-hidden border border-white/10 bg-white/[0.02] p-3 transition-all group-hover:border-indigo-500/30 group-hover:bg-white/[0.04]">
+                <div className="rounded-xl overflow-hidden shadow-2xl">
+                  <Image
+                    src="/syllaboom_class_notif_ical.png"
+                    alt="Class schedule automatically added to Apple Calendar"
+                    width={570}
+                    height={490}
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 text-center">
+                <div className="inline-flex items-center gap-2 text-sm font-medium text-white mb-1">
+                  <span className="text-lg">📅</span>
+                  Class Schedule
+                </div>
+                <p className="text-gray-500 text-sm">Auto-syncs to Apple Calendar</p>
+              </div>
+            </motion.div>
+
+            {/* Grade Calculator */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+              className="group"
+            >
+              <div className="rounded-2xl overflow-hidden border border-white/10 bg-white/[0.02] p-3 transition-all group-hover:border-emerald-500/30 group-hover:bg-white/[0.04]">
+                <div className="rounded-xl overflow-hidden shadow-2xl">
+                  <Image
+                    src="/syllaboom_grade_calculator.png"
+                    alt="Grade calculator exported to Google Sheets"
+                    width={570}
+                    height={490}
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 text-center">
+                <div className="inline-flex items-center gap-2 text-sm font-medium text-white mb-1">
+                  <span className="text-lg">📊</span>
+                  Grade Calculator
+                </div>
+                <p className="text-gray-500 text-sm">Export to Google Sheets</p>
+              </div>
+            </motion.div>
+
+            {/* Calendar - Quiz Reminder */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+              className="group"
+            >
+              <div className="rounded-2xl overflow-hidden border border-white/10 bg-white/[0.02] p-3 transition-all group-hover:border-violet-500/30 group-hover:bg-white/[0.04]">
+                <div className="rounded-xl overflow-hidden shadow-2xl">
+                  <Image
+                    src="/syllaboom_quiz_notif_ical.png"
+                    alt="Quiz reminders with alerts in Apple Calendar"
+                    width={570}
+                    height={490}
+                    className="w-full h-auto"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 text-center">
+                <div className="inline-flex items-center gap-2 text-sm font-medium text-white mb-1">
+                  <span className="text-lg">🔔</span>
+                  Smart Reminders
+                </div>
+                <p className="text-gray-500 text-sm">Alerts before every deadline</p>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Integration logos */}
+          <div className="mt-12 text-center">
+            <p className="text-gray-500 text-sm mb-4">Works with</p>
+            <div className="flex items-center justify-center gap-6 text-gray-400">
+              <span className="flex items-center gap-2 text-sm">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2.4c5.302 0 9.6 4.298 9.6 9.6s-4.298 9.6-9.6 9.6S2.4 17.302 2.4 12 6.698 2.4 12 2.4z"/>
+                </svg>
+                Apple Calendar
+              </span>
+              <span className="flex items-center gap-2 text-sm">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2.4c5.302 0 9.6 4.298 9.6 9.6s-4.298 9.6-9.6 9.6S2.4 17.302 2.4 12 6.698 2.4 12 2.4z"/>
+                </svg>
+                Google Calendar
+              </span>
+              <span className="flex items-center gap-2 text-sm">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2.4c5.302 0 9.6 4.298 9.6 9.6s-4.298 9.6-9.6 9.6S2.4 17.302 2.4 12 6.698 2.4 12 2.4z"/>
+                </svg>
+                Google Sheets
+              </span>
+            </div>
           </div>
         </motion.div>
 

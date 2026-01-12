@@ -6,12 +6,12 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export const PRICES = {
   single: {
-    amount: 300, // $3.00
-    name: 'Single Class',
+    amount: 179, // $1.79
+    name: 'Single Syllabus',
     description: 'One syllabus → complete study system',
   },
   semester: {
-    amount: 800, // $8.00
+    amount: 489, // $4.89
     name: 'Semester Pack',
     description: 'Up to 6 syllabi → complete study systems',
   },

@@ -23,14 +23,13 @@ export default function PricingToggle({ selected, onChange }: PricingToggleProps
               : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
           }`}
         >
-          <div className="flex items-baseline justify-center gap-2">
-            <span className="text-lg text-gray-500 line-through">$5</span>
+          <div className="flex items-baseline justify-center gap-1">
             <span className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              $3
+              $1.79
             </span>
           </div>
-          <div className="text-sm text-gray-400 mt-1">Single Class</div>
-          <div className="text-xs text-indigo-400 mt-1">40% off</div>
+          <div className="text-sm text-gray-400 mt-1">1 Syllabus</div>
+          <div className="text-xs text-indigo-400 mt-1">Try it out</div>
 
           {/* Selection indicator - using CSS transition instead of layoutId for better performance */}
           <div
@@ -58,16 +57,14 @@ export default function PricingToggle({ selected, onChange }: PricingToggleProps
             </div>
           </div>
 
-          <div className="flex items-baseline justify-center gap-2">
-            <span className="text-lg text-gray-500 line-through">$18</span>
+          <div className="flex items-baseline justify-center gap-1">
             <span className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-              $8
+              $4.89
             </span>
           </div>
-          <div className="text-sm text-gray-400 mt-1">Semester Pack</div>
-          <div className="text-xs text-emerald-400 mt-1 flex items-center justify-center gap-1">
-            <span>Up to 6 classes</span>
-            <span className="text-emerald-500">• 55% off</span>
+          <div className="text-sm text-gray-400 mt-1">Up to 6 Syllabi</div>
+          <div className="text-xs text-emerald-400 mt-1">
+            $0.82/class
           </div>
 
           {/* Selection indicator - using CSS transition instead of layoutId for better performance */}
