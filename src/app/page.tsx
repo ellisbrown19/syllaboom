@@ -7,12 +7,19 @@ import FileUpload from '@/components/FileUpload';
 import PricingToggle from '@/components/PricingToggle';
 import { analytics } from '@/lib/analytics';
 
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function Home() {
   const [priceType, setPriceType] = useState<'single' | 'semester'>('single');
   const [syllabusText, setSyllabusText] = useState<string | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const isValidEmail = EMAIL_REGEX.test(email);
 
   const handleFileProcessed = (text: string, name: string) => {
     setSyllabusText(text);
@@ -22,7 +29,10 @@ export default function Home() {
   };
 
   const handleCheckout = async () => {
-    if (!syllabusText) return;
+    if (!syllabusText || !isValidEmail || isCheckingOut) return;
+
+    setIsCheckingOut(true);
+    setCheckoutError(null);
 
     analytics.checkoutStarted(priceType, email);
     analytics.emailCaptured('checkout');
@@ -31,11 +41,18 @@ export default function Home() {
     localStorage.setItem('pendingFilename', filename || 'syllabus.pdf');
 
     try {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
       const response = await fetch('/api/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceType, email }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -49,7 +66,11 @@ export default function Home() {
       window.location.href = data.url;
     } catch (err) {
       console.error('Checkout error:', err);
-      alert('Failed to start checkout. Please try again.');
+      const message = err instanceof Error && err.name === 'AbortError'
+        ? 'Request timed out. Please try again.'
+        : 'Failed to start checkout. Please try again.';
+      setCheckoutError(message);
+      setIsCheckingOut(false);
     }
   };
 
@@ -196,22 +217,40 @@ export default function Home() {
                   exit={{ opacity: 0, y: -20 }}
                   className="mt-8 space-y-4"
                 >
-                  <input
-                    type="email"
-                    placeholder="Your email (for receipt)"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-2xl focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder-gray-500"
-                  />
+                  <div>
+                    <label htmlFor="checkout-email" className="sr-only">Email address</label>
+                    <input
+                      id="checkout-email"
+                      type="email"
+                      placeholder="Your email (for receipt)"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      maxLength={254}
+                      className={`w-full px-5 py-4 bg-white/5 border rounded-2xl focus:outline-none focus:ring-2 transition-all placeholder-gray-500 ${
+                        email && !isValidEmail
+                          ? 'border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20'
+                          : 'border-white/10 focus:border-indigo-500/50 focus:ring-indigo-500/20'
+                      }`}
+                    />
+                    {email && !isValidEmail && (
+                      <p className="mt-1.5 text-xs text-red-400">Please enter a valid email address</p>
+                    )}
+                  </div>
+
+                  {checkoutError && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                      {checkoutError}
+                    </div>
+                  )}
 
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: isCheckingOut ? 1 : 1.02 }}
+                    whileTap={{ scale: isCheckingOut ? 1 : 0.98 }}
                     onClick={handleCheckout}
-                    disabled={!email}
+                    disabled={!isValidEmail || isCheckingOut}
                     className="w-full py-5 rounded-2xl font-semibold text-lg bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500 hover:from-indigo-400 hover:via-violet-400 hover:to-purple-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40"
                   >
-                    Get My Study System — ${priceType === 'single' ? '1.79' : '4.89'}
+                    {isCheckingOut ? 'Processing...' : `Get My Study System — $${priceType === 'single' ? '1.79' : '4.89'}`}
                   </motion.button>
 
                   <button

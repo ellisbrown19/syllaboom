@@ -14,10 +14,24 @@ export default function FileUpload({ onFileProcessed, disabled }: FileUploadProp
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
   const processFile = async (file: File) => {
-    if (!file.name.endsWith('.pdf')) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
       setError('Please upload a PDF file');
       analytics.uploadFailed('invalid_file_type');
+      return;
+    }
+
+    if (file.size === 0) {
+      setError('File is empty');
+      analytics.uploadFailed('empty_file');
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setError('File too large (max 10MB)');
+      analytics.uploadFailed('file_too_large');
       return;
     }
 
